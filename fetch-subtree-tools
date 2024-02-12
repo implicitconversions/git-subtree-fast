@@ -10,17 +10,31 @@ url=https://raw.githubusercontent.com/implicitconversions/git-subtree-fast/main
 
 # need to download the updater first in case it updates itself.
 # use bash exec to to do so, to avoid bash blowing up if the file changed.
-(( INSTALL_IS_SECOND_RUN )) || {
+(( INSTALL_IS_SECOND_RUN || NO_AUTO_UPDATE )) || {
     echo "Performing self-update step..."
-    exec bash -c "curl $url/fetch-subtree-tools -o '$target_dir/fetch-subtree-tools' && export INSTALL_IS_SECOND_RUN=1 && '${BASH_SOURCE[0]}'"
+    exec bash -c "curl $url/fetch-subtree-tools -o '$target_dir/fetch-subtree-tools' && chmod +x '$target_dir/fetch-subtree-tools' && export INSTALL_IS_SECOND_RUN=1 && '${BASH_SOURCE[0]}'"
 }
 
 echo "Fetching scripts into $(realpath "$target_dir")"
 
-set -x
-curl -o "$target_dir/subtree-add" $url/subtree-add
-curl -o "$target_dir/subtree-pull" $url/subtree-pull
-curl -o "$target_dir/subtree-push" $url/subtree-push
-curl -o "$target_dir/git-subtree-fast" $url/git-subtree-fast
+files_to_fetch=(
+    subtree-add
+    subtree-pull
+    subtree-push
+    git-subtree-fast
+)
+
+for item in "${files_to_fetch[@]}"; do
+    echo "Downloading $url/$item -> $target_dir/$item"
+    curl -o "$target_dir/$item" $url/$item > /dev/null
+    chmod +x "$target_dir/$item"
+done
+
+cd $target_dir
+git_dir=$(git rev-parse --show-toplevel) && [[ $git_dir ]] && {
+    echo "Target dir appears to be a git dir. Adding files and applying -x ..."
+    git update-index --add --chmod +x "${files_to_fetch[@]}"
+    echo "Finished applying execute bit (-x) to the git index."
+} || :
 
 echo "Fetch of subtree commands completed successfully."
