@@ -1,0 +1,55 @@
+#!/bin/bash
+
+for item; do
+    [[ $item == --help ]] && SHOW_HELP=1 && continue;
+done
+
+(( SHOW_HELP )) && {
+    cat << BOOKENDS
+usage: pull.sh DIRNAME [BRANCH_NAME]
+Executes a subtree pull for DIRNAME. Uses information in subtree-config.txt to know
+where to pull from.
+
+BOOKENDS
+    exit
+}
+
+mydir=$(dirname ${BASH_SOURCE[0]})
+
+ARGS=()
+POSITIONAL=()
+for item; do
+    [[ $item == -- ]] && end_of_args=1
+
+    (( end_of_args )) || {
+        [[ $item == -* ]] && ARGS+=( "$item" ) && continue
+    }
+
+    POSITIONAL+=( "$item" )
+done
+
+set -- "${POSITIONAL[@]}"
+
+subtree_dir=${1%/}
+upstream_branch=${2:-main}
+dir_and_url=$(grep "^$subtree_dir " $mydir/subtree-config.txt)
+
+shift 2 || shift
+
+[[ $subtree_dir ]] || {
+    >&2 echo "expected at least two arguments. try --help for usage."
+    exit 1
+}
+
+[[ $dir_and_url ]] || {
+    >&2 echo "error: no entry for '$subtree_dir' in $mydir/subtree-config.txt"
+    exit 1
+}
+
+function subtree_exec() {
+    set -x
+    $mydir/git-subtree-fast.sh pull --squash "$@"
+    { set +x; } &> /dev/null
+}
+
+subtree_exec "${ARGS[@]}" --prefix $dir_and_url $upstream_branch "$@"
