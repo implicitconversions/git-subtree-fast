@@ -14,6 +14,17 @@ I like to sandbox all subtrees into a `subtree/` dirto help make it clear to all
 directories are in fact subtrees, since it's not immediately clear otherwise which dirs are
 subtrees.
 
+A typical installation sequence could look like this:
+```
+cd /path/to/repo
+mkdir subtree && cd subtree
+curl -O https://raw.githubusercontent.com/implicitconversions/git-subtree-fast/main/fetch-subtree-tools
+./fetch-subtree-tools
+```
+
+Updating the subtree tools to latest upstream `main` branch can be done at any time by running the
+`fetch-subtree-tools` command.
+
 ## Usage
 
 ### subtree-add
