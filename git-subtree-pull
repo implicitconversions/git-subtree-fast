@@ -3,9 +3,7 @@
 POSITIONAL=()
 for item; do
     (( end_of_args )) && POSITIONAL+=("$item") && continue
-
-    rval=${item#*=}
-    case "$lval" in
+    case "$item" in
         --help)            SHOW_HELP=1 ;;
         --add-if-missing)  add_if_missing=1 ;;
         --)                end_of_args=1 ;;
