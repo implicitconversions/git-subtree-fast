@@ -1,24 +1,46 @@
 #!/bin/bash
 
+POSITIONAL=()
+SUBTREE_FAST_ARGS=()
 for item; do
-    [[ $item == --help ]] && SHOW_HELP=1 && continue;
+    (( git_subtree_args )) && SUBTREE_FAST_ARGS+=( "$item" ) && continue
+    [[ "$item" == --- ]] && git_subtree_args=1 && continue
+
+    rval=${item#*=}
+    case "$lval" in
+        --help) SHOW_HELP=1 ;;
+        --config=*) config_file=$rval ;;
+        --) end_of_args=1 ;;
+        *) POSITIONAL+=( "$item" )
+    esac
 done
 
 (( SHOW_HELP )) && {
     cat << BOOKENDS
-usage: add.sh DIRNAME URL [BRANCH_NAME]
-Creates a git subtree at a DIRNAME, cloned from a given URL. Uses --squash followed
-by 'git subtree split --rejoin' to ensure the tree is in good efficient working order.
+(( SHOW_HELP )) && {
+    cat << BOOKENDS
+usage: subtree-add [--config=CONFIG_FILE] [--] TARGET_DIR URL [BRANCH_NAME] [---] [GIT_SUBTREE_ARGS...]
+
+Creates a git subtree at a TARGET_DIR, cloned from a given URL. Specify optional BRANCH_NAME
+to clone from a specific branch. The default branch is 'main'
+
+Updates the CONFIG_FILE to know the remote URL to do future pulls and pushes from.
+
+Use '---' to specify end of regular command arguments. the remainder of the command line
+will be passed through to the git-subtree command.
+
+options:
+  --config=FILE   specifies the config file to update. Default is subtree-config.txt
+                  positioned at the toplevel dir of the git repo.
 
 example:
-  add.sh libawesome https://github.com/libawesome.git main
+  subtree-add libawesome https://github.com/libawesome.git dev/extra_awesome
+
 BOOKENDS
     exit
 }
 
-mydir=$(dirname ${BASH_SOURCE[0]})
-
-subtree_dir=$1
+subtree_dir="$1"
 url=$2
 branch=${3:-main}
 
@@ -27,16 +49,21 @@ branch=${3:-main}
     exit 1
 }
 
+# if its not in the path then fall back to whatever exists in the same dir as this script.
+command -v git-subtree-fast &> /dev/null || {
+    function git-subtree-fast() {
+        local mydir
+        mydir="$(dirname "${BASH_SOURCE[0]}")"
+        "$mydir/git-subtree-fast" "$@"
+    }
+}
+
 set -e
 
-$mydir/git-subtree-fast.sh add --squash --prefix $subtree_dir "$url" $branch
+git-subtree-fast add --squash --prefix $subtree_dir "$url" $branch
 
-# was investigating using subtree-split to reduce "push" time (eg where it needs to scan all commits), but
-# seems it only works once there's some changes to the subtree made, or such. That's getting too heavy
-# handed to do automatically so leaving this as it is... --jstine
-
-#git subtree split --squash --rejoin --prefix $subtree_dir
-
-sed "\,^$subtree_dir,d" -i $mydir/subtree-config.txt || :
-printf "%s %s\n" $subtree_dir $url >> $mydir/subtree-config.txt
-sort -u $mydir/subtree-config.txt -o $mydir/subtree-config.txt
+# Update config file:
+#  - remove existing line and replace it with a new line.
+sed "\,^$subtree_dir,d" -i "$config_file" || :
+printf "%s %s\n" $subtree_dir $url >> "$config_file"
+sort -u "$config_file" -o "$config_file"

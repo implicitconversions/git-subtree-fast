@@ -1,24 +1,67 @@
 #!/bin/bash
 
+# TODO: add a --url option.
+
+POSITIONAL=()
+SUBTREE_FAST_ARGS=()
 for item; do
-    [[ $item == --help ]] && SHOW_HELP=1 && continue;
+    (( git_subtree_args )) && SUBTREE_FAST_ARGS+=( "$item" ) && continue
+    [[ "$item" == --- ]] && git_subtree_args=1 && continue
+
+    rval=${item#*=}
+    case "$lval" in
+        --help) SHOW_HELP=1 ;;
+        --config=*) config_file=$rval ;;
+        --) end_of_args=1 ;;
+        *) POSITIONAL+=( "$item" )
+    esac
 done
 
 (( SHOW_HELP )) && {
     cat << BOOKENDS
-usage: push.sh DIRNAME [BRANCH_NAME]
-Executes a subtree push for DIRNAME. Uses information in subtree-config.txt to know
-where to push to.
+usage: subtree-push [--config=CONFIG_FILE] [--] DIRNAME [BRANCH_NAME] [---] [GIT_SUBTREE_ARGS...]
+
+Executes a subtree push for DIRNAME. Specify optional BRANCH_NAME to push to a specific
+branch. The default branch is 'subtree-push' It is intentional that the default push
+branch is not the branch wich was pulled from.
+
+Uses information in CONFIG_FILE to know the remote URL to push to.
+
+Use '---' to specify end of regular command arguments. the remainder of the command line
+will be passed through to the git-subtree command.
+
+options:
+  --config=FILE   specifies the config file to update. Default is subtree-config.txt
+                  positioned at the toplevel dir of the git repo.
 
 BOOKENDS
     exit
 }
 
-mydir=$(dirname ${BASH_SOURCE[0]})
+set -- "${POSITIONAL[@]}"
+
+git_dir="$(git rev-parse --show-toplevel)" || {
+    echo "$(basename $0) must be called from a valid git workspace."
+    exit 1
+} >&2
+
+[[ $config_file ]] || {
+    config_file="$git_dir/subtree-config.txt"
+}
+
+# if its not in the path then fall back to whatever exists in the same dir as this script.
+command -v git-subtree-fast &> /dev/null || {
+    function git-subtree-fast() {
+        local mydir
+        mydir="$(dirname "${BASH_SOURCE[0]}")"
+        "$mydir/git-subtree-fast" "$@"
+    }
+}
+
 
 subtree_dir=${1%/}
-branch=${2:-masticore/subtree-push}
-item=$(grep "^$subtree_dir " $mydir/subtree-config.txt)
+upstream_branch=${2:-subtree-push}
+dir_and_url=$(grep "^$subtree_dir " "$config_file")
 
 shift 2 || shift
 
@@ -27,15 +70,14 @@ shift 2 || shift
     exit 1
 }
 
-[[ $item ]] || {
-    >&2 echo "error: no entry for '$subtree_dir' in $mydir/subtree-config.txt"
+[[ $dir_and_url ]] || {
+    echo "error: no entry for '$subtree_dir' in $config_file"
     exit 1
-}
+} >&2
 
 function subtree_exec() {
-    set -x
-    $mydir/git-subtree-fast.sh push --prefix "$@"
-    { set +x; } &> /dev/null
+    local -; set -x
+    git-subtree-fast push --prefix "$@"
 }
 
-subtree_exec $item $branch "$@"
+subtree_exec "${SUBTREE_FAST_ARGS[@]}" $dir_and_url $upstream_branch "$@"

@@ -1,8 +1,44 @@
 #!/bin/bash
 
+POSITIONAL=()
+SUBTREE_FAST_ARGS=()
 for item; do
-    [[ $item == --help ]] && SHOW_HELP=1 && continue;
+    (( git_subtree_args )) && SUBTREE_FAST_ARGS+=( "$item" ) && continue
+    [[ "$item" == --- ]] && git_subtree_args=1 && continue
+
+    (( end_of_args )) && {
+        POSITIONAL+=( "$item" )
+        continue
+    }
+
+    rval=${item#*=}
+    case "$lval" in
+        --help) SHOW_HELP=1 ;;
+        --config=*) config_file=$rval ;;
+        --) end_of_args=1 ;;
+        *) POSITIONAL+=( "$item" )
+    esac
 done
+
+(( SHOW_HELP )) && {
+    cat << BOOKENDS
+usage: subtree-pull [options...] [--] DIRNAME [BRANCH_NAME] [---] [GIT_SUBTREE_ARGS...]
+
+Executes a subtree pull for DIRNAME. Pulled content is always squashed. Specify optional
+BRANCH_NAME to pull to a specific branch. The default branch to pull is 'main'.
+
+Uses information in CONFIG_FILE to know the remote URL to push to.
+
+Use '---' to specify end of regular command arguments. the remainder of the command line
+will be passed through to the git-subtree command.
+
+options:
+  --config=FILE   specifies the config file to update. Default is subtree-config.txt
+                  positioned at the toplevel dir of the git repo.
+
+BOOKENDS
+    exit
+}
 
 (( SHOW_HELP )) && {
     cat << BOOKENDS
@@ -14,25 +50,29 @@ BOOKENDS
     exit
 }
 
-mydir=$(dirname ${BASH_SOURCE[0]})
-
-ARGS=()
-POSITIONAL=()
-for item; do
-    [[ $item == -- ]] && end_of_args=1
-
-    (( end_of_args )) || {
-        [[ $item == -* ]] && ARGS+=( "$item" ) && continue
-    }
-
-    POSITIONAL+=( "$item" )
-done
-
 set -- "${POSITIONAL[@]}"
+
+git_dir="$(git rev-parse --show-toplevel)" || {
+    echo "$(basename $0) must be called from a valid git workspace."
+    exit 1
+} >&2
+
+[[ $config_file ]] || {
+    config_file="$git_dir/subtree-config.txt"
+}
+
+# if its not in the path then fall back to whatever exists in the same dir as this script.
+command -v git-subtree-fast &> /dev/null || {
+    function git-subtree-fast() {
+        local mydir
+        mydir="$(dirname "${BASH_SOURCE[0]}")"
+        "$mydir/git-subtree-fast" "$@"
+    }
+}
 
 subtree_dir=${1%/}
 upstream_branch=${2:-main}
-dir_and_url=$(grep "^$subtree_dir " $mydir/subtree-config.txt)
+dir_and_url=$(grep "^$subtree_dir " "$config_file")
 
 shift 2 || shift
 
@@ -42,14 +82,13 @@ shift 2 || shift
 }
 
 [[ $dir_and_url ]] || {
-    >&2 echo "error: no entry for '$subtree_dir' in $mydir/subtree-config.txt"
+    echo "error: no entry for '$subtree_dir' in $config_file"
     exit 1
-}
+} >&2
 
 function subtree_exec() {
-    set -x
-    $mydir/git-subtree-fast.sh pull --squash "$@"
-    { set +x; } &> /dev/null
+    local -; set -x
+    git-subtree-fast pull --squash "$@"
 }
 
-subtree_exec "${ARGS[@]}" --prefix $dir_and_url $upstream_branch "$@"
+subtree_exec "${SUBTREE_FAST_ARGS[@]}" --prefix $dir_and_url $upstream_branch "$@"
