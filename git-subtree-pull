@@ -1,0 +1,53 @@
+#!/bin/bash
+
+POSITIONAL=()
+for item; do
+    (( end_of_args )) && POSITIONAL+=("$item") && continue
+
+    rval=${item#*=}
+    case "$lval" in
+        --help)            SHOW_HELP=1 ;;
+        --add-if-missing)  add_if_missing=1 ;;
+        --)                end_of_args=1 ;;
+        *) POSITIONAL+=( "$item" )
+    esac
+done
+
+set -- "${POSITIONAL[@]}"
+
+(( SHOW_HELP )) && {
+    cat << BOOKENDS
+usage: git-subtree-pull SUBTREE_PREFIX UPSTREAM_URL BRANCH_NAME
+
+Executes a subtree pull for the git subdirectory SUBTREE_PREFIX. This directory must be relative to
+the git toplevel directory. All three arguments are required.
+
+options:
+  --add-if-missing        Adds the subtree to the repository if the directory is missing or empty.
+                          Intended for use from auto-generated scripts that have url/branch name baked in.
+BOOKENDS
+    exit
+}
+
+subtree_prefix=$1
+shift || {
+    echo "$(basename $0): not enough arguments."
+    exit 1
+}
+
+git_dir="$(git rev-parse --show-toplevel)" || {
+    echo "$(basename "$0") must be called from a valid git workspace."
+    exit 1
+} >&2
+
+(( add_if_missing )) && {
+    [[ -z "$(ls -A ${git_dir}/$subtree_prefix)" ]] && {
+        set-x
+        git-subtree-fast add --squash --prefix $subtree_prefix "$@"
+        exit
+    }
+}
+
+cd "$git_dir" || exit
+set -x
+git-subtree-fast pull --squash --prefix $subtree_prefix "$@"

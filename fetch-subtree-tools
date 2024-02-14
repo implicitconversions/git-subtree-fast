@@ -18,9 +18,10 @@ url=https://raw.githubusercontent.com/implicitconversions/git-subtree-fast/main
 echo "Fetching scripts into $(realpath "$target_dir")"
 
 files_to_fetch=(
-    subtree-add
-    subtree-pull
-    subtree-push
+    git-subtree-init
+    git-subtree-add
+    git-subtree-pull
+    git-subtree-push
     git-subtree-fast
 )
 

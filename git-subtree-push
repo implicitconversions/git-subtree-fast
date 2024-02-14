@@ -1,0 +1,40 @@
+#!/bin/bash
+
+POSITIONAL=()
+for item; do
+    (( end_of_args  )) && POSITIONAL+=("$item") && continue
+
+    rval=${item#*=}
+    case "$lval" in
+        --help) SHOW_HELP=1 ;;
+        --) end_of_args=1 ;;
+        *) POSITIONAL+=( "$item" )
+    esac
+done
+
+set -- "${POSITIONAL[@]}"
+
+(( SHOW_HELP )) && {
+    cat << BOOKENDS
+usage: git-subtree-push SUBTREE_PREFIX UPSTREAM_URL BRANCH_NAME
+
+Executes a subtree push for the git subdirectory SUBTREE_PREFIX. This directory must be relative to
+the git toplevel directory. All three arguments are required.
+BOOKENDS
+    exit
+}
+
+subtree_prefix=$1
+shift || {
+    echo "$(basename $0): not enough arguments."
+    exit
+}
+
+git_dir="$(git rev-parse --show-toplevel)" || {
+    echo "$(basename "$0") must be called from a valid git workspace."
+    exit 1
+} >&2
+
+cd "$git_dir" || exit
+set -x
+git-subtree-fast push --prefix $subtree_prefix "$@"

@@ -1,0 +1,48 @@
+#!/bin/bash
+
+POSITIONAL=()
+for item; do
+    (( end_of_args  )) && POSITIONAL+=("$item") && continue
+
+    rval=${item#*=}
+    case "$lval" in
+        --help) SHOW_HELP=1 ;;
+        --) end_of_args=1 ;;
+        *) POSITIONAL+=( "$item" )
+    esac
+done
+
+set -- "${POSITIONAL[@]}"
+
+(( SHOW_HELP )) && {
+    cat << BOOKENDS
+usage: git-subtree-reset SUBTREE_PREFIX UPSTREAM_URL BRANCH_NAME
+
+Executes an rmdir followed by a subtree-add command for the git subdirectory SUBTREE_PREFIX.
+This effectively terminates the merge history for any prior
+All three arguments are required.
+
+  SUBTREE_PREFIX    must be relative to the git toplevel directory.
+BOOKENDS
+    exit
+}
+
+subtree_prefix=$1
+shift || {
+    echo "$(basename $0): not enough arguments."
+    exit
+}
+
+{ git_dir="$(git rev-parse --show-toplevel)" && [[ $git_dir ]] ; } || {
+    echo "$(basename "$0") must be called from a valid git workspace."
+    exit 1
+} >&2
+
+set -e
+cd "$git_dir"
+
+set -x
+rm -rf $git_dir/$subtree_prefix &> /dev/null
+git ls-files --deleted -- $subtree_prefix | xargs git add
+git commit -m "Removed subtree $subtree_prefix"
+git-subtree-fast add --squash --prefix $subtree_prefix $$e{url} $$e{branch} "$$e@"

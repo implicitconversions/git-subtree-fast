@@ -1,0 +1,164 @@
+#!/bin/bash
+
+
+POSITIONAL=()
+SUBTREE_FAST_ARGS=()
+for item; do
+    rval=${item#*=}
+    case "$lval" in
+        --help) SHOW_HELP=1 ;;
+        --script-dir=*) script_dir=$rval ;;
+        #--subtree-dir=*) target_dir=$rval ;;
+        --pull-branch=*) pull_branch=$rval ;;
+        --push_bransh=*) push_branch=$rval ;;
+        --subtree-command=*) subtree_command="$rval" ;;
+        --) end_of_args=1 ;;
+        *) POSITIONAL+=( "$item" )
+    esac
+done
+
+(( SHOW_HELP )) && {
+    cat << BOOKENDS
+usage: subtree-init [options..] [--] TARGET_DIR UPSTREAM_URL
+
+Initialized scripts that operate on a git subtree at a TARGET_DIR sourced from UPSTREAM_URL.
+
+After subtree-init, the subtree can 
+
+options:
+  --script-dir=DIR      specifies the place to install the push/pull/reset-hard scripts.
+  --pull-branch=BRANCH  sets the default branch for push operations (default=main)
+  --push-branch=BRANCH  sets the default branch for pull operations (default=REPO/subtree-push)
+
+example:
+  subtree-init libawesome https://github.com/libawesome.git
+
+BOOKENDS
+    exit
+}
+
+command -v cygpath > /dev/null || {
+    # if cygpath doesn't exist, assume we're running a true unix system.
+    # feign away cygpath by just echoing all valid inputs in the way cygpath would echo them.
+    function cygpath() {
+        local item endargs
+        local POSITIONAL=()
+        local abspath=0
+        for item; do
+            (( endargs )) && {
+                POSITIONAL+=( "$item" )
+                continue
+            }
+            case "$item" in
+                -a|--absolute) abspath=1 ;;
+                --)   endargs=1 ;;
+                -*)   ;;
+                *)    POSITIONAL+=( "$item" )
+            esac
+        done
+        
+        (( abspath )) && {
+            realpath -s -m "${POSITIONAL[@]}"
+            return
+        }
+
+        printf "%s\n" "${POSITIONAL[@]}"
+    }
+}
+
+set -- "${POSITIONAL[@]}"
+
+git_dir="$(git rev-parse --show-toplevel)" || {
+    echo "$(basename "$0") must be called from a valid git workspace."
+    exit 1
+} >&2
+
+git_dir="$(cygpath "$git_dir")"
+
+# assume the base dir is the subtree dir from the root dir of the repository.
+# TODO: allow specifying this by some toplevel config file, such as $git_dir/subtree_config
+[[ $script_dir ]] || {
+    script_dir=$git_dir/subtree
+}
+
+[[ $subtree_command ]] || {
+    subtree_command=git-subtree-fast
+}
+
+target_dir="$1"
+upstream_url=$2
+
+[[ $target_dir && $upstream_url ]] || {
+    >&2 echo "$(basename $0): expected at least two arguments. try --help for usage."
+    exit 1
+}
+
+
+set -e
+
+mydir="$(dirname "${BASH_SOURCE[0]}")"
+target_basename=$(basename $target_dir)
+target_dir="$(cygpath "$target_dir")"
+[[ "$target_dir" == /* ]] || target_dir=$git_dir/$target_dir
+
+# Careful! All the dirs need to be normalized according to the git-dir, since that's what
+# the subtree command expects. We use the location of the subtree scripts as the "anchor"
+# from which 
+mkdir -p "$script_dir"
+script_dir="$(realpath -e --relative-to="$git_dir"  $script_dir)"
+target_dir="$(realpath -m --relative-to="$git_dir"  $target_dir)"
+
+repo_prefix=$(basename $git_dir)/
+
+pull_branch=${pull_branch:-main}
+push_branch=${push_branch:-${repo_prefix}subtree-push}
+
+# the 'e' variable is used to escape vars in the envsubst.
+#  example:  $$e{variable}  will expand to $variable
+e=
+
+subtree_prefix=$target_dir
+shebang='#!/bin/bash'
+
+cd "$git_dir"
+
+function gen_subtree_command() {
+    local branch=$pull_branch
+    local subtree_command=git-subtree-$1
+    [[ $1 == pull ]] && local add_if_missing=--add-if-missing
+    [[ $1 == push ]] && branch=$push_branch
+
+    echo "  generating $git_dir/$script_dir/$1-$target_basename"
+    cat > $script_dir/$1-$target_basename << BOOKENDS
+#!/bin/bash
+
+command -v $subtree_command &> /dev/null || {
+    echo "$subtree_command is missing from the PATH."
+    echo
+    echo "git subtree tools installation instructions can be found here:"
+    echo "  https://github.com/implicitconversions/git-subtree-fast"
+    exit 1
+} >&2
+
+set -x
+exec $subtree_command $add_if_missing $subtree_prefix $upstream_url \${1:-$branch}
+BOOKENDS
+
+    git update-index --add --chmod +x $script_dir/$1-$target_basename
+}
+
+gen_subtree_command push  
+gen_subtree_command pull  
+gen_subtree_command reset 
+
+
+# SUCCESS. Exit with some helpful tips.
+
+cat << BOOKENDS
+
+Files have been added to your git workspace. Please commit them.
+
+Next step, clone the subtree into the workspace using pull:
+   $script_dir/pull-$target_basename
+
+BOOKENDS
