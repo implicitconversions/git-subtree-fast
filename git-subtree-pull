@@ -13,7 +13,15 @@ for item; do
     esac
 done
 
-set -- "${POSITIONAL[@]}"
+FORWARD_ARGS=()
+for param in "${POSITIONAL[@]}"
+do
+    # We know --add-if-missing isn't a valid param, so don't forward it to git-subtree
+    if [[ "$param" != "--add-if-missing" ]]; then
+        FORWARD_ARGS+=( "$param" )
+    fi
+done
+set -- "${FORWARD_ARGS[@]}"
 
 (( SHOW_HELP )) && {
     cat << BOOKENDS
