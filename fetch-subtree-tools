@@ -12,17 +12,17 @@ url=https://raw.githubusercontent.com/implicitconversions/git-subtree-fast/main
 # use bash exec to to do so, to avoid bash blowing up if the file changed.
 (( INSTALL_IS_SECOND_RUN || NO_AUTO_UPDATE )) || {
     echo "Performing self-update step..."
-    exec bash -c "curl $url/fetch-subtree-tools -o '$target_dir/fetch-subtree-tools' && chmod +x '$target_dir/fetch-subtree-tools' && export INSTALL_IS_SECOND_RUN=1 && '${BASH_SOURCE[0]}'"
+    exec bash -c "curl $url/fetch-subtree-tools -o '$target_dir/fetch-subtree-tools' && chmod +x '$target_dir/fetch-subtree-tools' && export INSTALL_IS_SECOND_RUN=1 && '${BASH_SOURCE[0]}' '${target_dir}'"
 }
 
 echo "Fetching scripts into $(realpath "$target_dir")"
 
 files_to_fetch=(
+    git-subtree-fast
     git-subtree-init
-    git-subtree-add
     git-subtree-pull
     git-subtree-push
-    git-subtree-fast
+    git-subtree-reset
 )
 
 for item in "${files_to_fetch[@]}"; do
