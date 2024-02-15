@@ -325,8 +325,7 @@ cache_get () {
 	do
 		if test -r "$cachedir/$oldrev"
 		then
-			read newrev <"$cachedir/$oldrev"
-			echo $newrev
+			cat $cachedir/$oldrev
 		fi
 	done
 }
@@ -622,9 +621,8 @@ rejoin_msg () {
 	EOF
 }
 
-# Usage: squash_msg DIR OLD_SUBTREE_COMMIT NEW_SUBTREE_COMMIT
+# Usage: squash_msg DIR OLD_SUBTREE_COMMIT NEW_SUBTREE_COMMIT [MAINLINE_COMMIT]
 squash_msg () {
-	assert test $# = 3 -o $# = 4
 	dir="$1"
 	oldsub="$2"
 	newsub="$3"
@@ -689,9 +687,8 @@ tree_changed () {
 	fi
 }
 
-# Usage: new_squash_commit OLD_SQUASHED_COMMIT OLD_NONSQUASHED_COMMIT NEW_NONSQUASHED_COMMIT
+# Usage: new_squash_commit OLD_SQUASHED_COMMIT OLD_NONSQUASHED_COMMIT NEW_NONSQUASHED_COMMIT [MAINLINE_COMMIT]
 new_squash_commit () {
-	assert test $# = 3 -o $# = 4
 	old="$1"
 	oldsub="$2"
 	newsub="$3"
