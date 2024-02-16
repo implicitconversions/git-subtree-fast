@@ -344,7 +344,7 @@ cache_miss () {
 # Usage: check_parents [REVS...]
 check_parents () {
 	missed=$(cache_miss "$@") || exit $?
-	local indent=$(($indent + 1))
+	local indent=$((indent + 1))
 	for miss in $missed
 	do
 		if ! test -r "$cachedir/notree/$miss"
@@ -370,7 +370,12 @@ cache_set () {
 		test "$oldrev" != "latest_new" &&
 		test -e "$cachedir/$oldrev"
 	then
-		die "fatal: cache for $oldrev already exists!"
+		local existing_value=$(<$cachedir/$oldrev)
+		if [[ "$existing_value" == "$newrev" ]]; then
+			echo >&2 "warning: cache for $oldrev already exists, but matches expected value." 
+		else
+			die "fatal: cache for $oldrev already exists! Expected $newrev but cached value is $existing_value"
+		fi
 	fi
 	echo "$newrev" >"$cachedir/$oldrev"
 }
@@ -397,13 +402,10 @@ try_remove_previous () {
 # Usage: process_subtree_split_trailer SPLIT_HASH MAIN_HASH [REPOSITORY]
 process_subtree_split_trailer () {
 	assert test $# = 2 -o $# = 3
-	b="$1"
-	sq="$2"
-	repository=""
-	if test "$#" = 3
-	then
-		repository="$3"
-	fi
+	local b="$1"
+	local sq="$2"
+	local repository="$3"
+
 	fail_msg="fatal: could not rev-parse split hash $b from commit $sq"
 	if ! sub="$(git rev-parse --verify --quiet "$b^{commit}")"
 	then
@@ -435,9 +437,9 @@ find_latest_squash () {
 	debug "Looking for latest squash (dir=$dir, repository=$repository)..."
 	local indent=$(( indent + 1 ))
 
-	sq=
-	main=
-	sub=
+	local sq
+	local main
+	local sub
 	git log --grep="^git-subtree-dir: $dir/*\$" \
 		--no-show-signature --pretty=format:'START %H%n%s%n%n%b%nEND%n' HEAD |
 	while read a b junk
@@ -482,15 +484,14 @@ find_existing_splits () {
 	debug "Looking for prior splits..."
 	local indent=$(( indent + 1 ))
 
-	dir="$1"
-	rev="$2"
-	repository=""
-	if test "$#" = 3
-	then
-		repository="$3"
-	fi
-	main=
-	sub=
+	local dir="$1"
+	local rev="$2"
+	local repository="$3"
+
+	local main=
+	local sub=
+	local sq=
+
 	local grep_format="^git-subtree-dir: $dir/*\$"
 	if test -n "$arg_split_ignore_joins"
 	then
@@ -819,7 +820,7 @@ process_split_commit () {
 	progress "$revcount/$revmax ($createcount) [$extracount]"
 
 	debug "Processing commit: $rev"
-	local indent=$(($indent + 1))
+	local indent=$((indent + 1))
 	exists=$(cache_get "$rev") || exit $?
 	if test -n "$exists"
 	then
@@ -829,6 +830,7 @@ process_split_commit () {
 	createcount=$(($createcount + 1))
 	debug "parents: $parents"
 	check_parents $parents
+
 	newparents=$(cache_get $parents) || exit $?
 	debug "newparents: $newparents"
 
@@ -945,11 +947,7 @@ cmd_split () {
 	else
 		die "fatal: you must provide exactly one revision, and optionally a repository.  Got: '$*'"
 	fi
-	repository=""
-	if test "$#" = 2
-	then
-		repository="$2"
-	fi
+	local repository="$2"
 
 	if test -n "$arg_split_rejoin"
 	then
