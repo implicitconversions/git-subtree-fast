@@ -2,10 +2,11 @@
 
 
 POSITIONAL=()
-SUBTREE_FAST_ARGS=()
 for item; do
+    (( end_of_args )) && POSITIONAL+=("$item") && continue
+
     rval=${item#*=}
-    case "$lval" in
+    case "$item" in
         --help) SHOW_HELP=1 ;;
         --script-dir=*) script_dir=$rval ;;
         #--subtree-dir=*) target_dir=$rval ;;
@@ -125,8 +126,8 @@ cd "$git_dir"
 function gen_subtree_command() {
     local branch=$pull_branch
     local subtree_command=git-subtree-$1
-    [[ $1 == pull ]] && local add_if_missing=--add-if-missing
-    [[ $1 == push ]] && branch=$push_branch
+    [[ $1 == pull   ]] && local add_if_missing=--add-if-missing
+    [[ $1 == push   ]] && branch=$push_branch
 
     echo "  generating $git_dir/$script_dir/$1-$target_basename"
     cat > $script_dir/$1-$target_basename << BOOKENDS
@@ -141,15 +142,16 @@ command -v $subtree_command &> /dev/null || {
 } >&2
 
 set -x
-exec $subtree_command $add_if_missing $subtree_prefix $upstream_url \${1:-$branch}
+export DEFAULT_BRANCH=$branch
+exec $subtree_command $add_if_missing $subtree_prefix $upstream_url "\$@"
 BOOKENDS
 
     git update-index --add --chmod +x $script_dir/$1-$target_basename
 }
 
 gen_subtree_command push  
-gen_subtree_command pull  
-gen_subtree_command reset 
+gen_subtree_command pull
+#gen_subtree_command reset
 
 
 # SUCCESS. Exit with some helpful tips.

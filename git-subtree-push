@@ -3,16 +3,25 @@
 POSITIONAL=()
 for item; do
     (( end_of_args  )) && POSITIONAL+=("$item") && continue
+    [[ $item ]] || continue
 
     rval=${item#*=}
     case "$lval" in
-        --help) SHOW_HELP=1 ;;
-        --) end_of_args=1 ;;
-        *) POSITIONAL+=( "$item" )
+        --help)         SHOW_HELP=1 ;;
+        --)             end_of_args=1 ;;
+        -*)             SUBTREE_ARGS+=("$item")  ;; # pass through to sub-command.
+        *)              POSITIONAL+=( "$item" )
     esac
 done
 
 set -- "${POSITIONAL[@]}"
+
+# this tool expects two positional arguments, followed by an optional third which can be a branch name.
+# if not provided, then use the default branch name provided by the optional wrapper script.
+
+(( $# < 3 )) && {
+    set -- "${POSITIONAL[@]}" $DEFAULT_BRANCH
+}
 
 (( SHOW_HELP )) && {
     cat << BOOKENDS
@@ -37,4 +46,4 @@ git_dir="$(git rev-parse --show-toplevel)" || {
 
 cd "$git_dir" || exit
 set -x
-git-subtree-fast push --prefix $subtree_prefix "$@"
+git-subtree-fast push --prefix "${SUBTREE_ARGS[@]}" $subtree_prefix "$@"
