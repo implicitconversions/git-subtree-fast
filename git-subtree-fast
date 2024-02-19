@@ -413,7 +413,9 @@ process_subtree_split_trailer () {
 		# before 'rev-parse'-ing it again, as it might be a tag that we do not have locally
 		if test -n "${repository}"
 		then
-			git fetch "$repository" "$b"
+			git fetch "$repository" "$b" ||
+				die "fatal: could not fetch from $repository. Please check your git credentials."
+
 			sub="$(git rev-parse --verify --quiet "$b^{commit}")" ||
 				die "$fail_msg"
 		else
