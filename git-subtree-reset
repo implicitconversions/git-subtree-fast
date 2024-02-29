@@ -52,4 +52,4 @@ set -x
 rm -rf $git_dir/$subtree_prefix &> /dev/null
 git ls-files --deleted -- $subtree_prefix | xargs git add
 git commit -m "Removed subtree $subtree_prefix"
-git-subtree-fast add --squash --prefix $subtree_prefix $$e{url} $$e{branch} "$$e@"
+git-subtree-fast add --prefix $subtree_prefix ${SUBTREE_ARGS[@]} $url $branch "$@"

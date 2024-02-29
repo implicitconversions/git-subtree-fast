@@ -46,4 +46,4 @@ git_dir="$(git rev-parse --show-toplevel)" || {
 
 cd "$git_dir" || exit
 set -x
-git-subtree-fast push --prefix "${SUBTREE_ARGS[@]}" $subtree_prefix "$@"
+git-subtree-fast push --prefix $subtree_prefix "${SUBTREE_ARGS[@]}" "$@"
