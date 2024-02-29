@@ -11,7 +11,8 @@ for item; do
         --script-dir=*) script_dir=$rval ;;
         #--subtree-dir=*) target_dir=$rval ;;
         --pull-branch=*) pull_branch=$rval ;;
-        --push_bransh=*) push_branch=$rval ;;
+        --push-branch=*) push_branch=$rval ;;
+        --pull-squash=*) squash_on_pull=$rval ;;
         --subtree-command=*) subtree_command="$rval" ;;
         --) end_of_args=1 ;;
         *) POSITIONAL+=( "$item" )
@@ -30,9 +31,11 @@ options:
   --script-dir=DIR      specifies the place to install the push/pull/reset-hard scripts.
   --pull-branch=BRANCH  sets the default branch for push operations (default=main)
   --push-branch=BRANCH  sets the default branch for pull operations (default=REPO/subtree-push)
+  --pull-squash=BOOL    sets squash-on-pull behavior. Set to 0 to retain full blame history
 
 example:
   subtree-init libawesome https://github.com/libawesome.git
+  subtree-init --pull-squash=1 sdk_engine_x https://github.com/sdk_engine_x.git
 
 BOOKENDS
     exit
@@ -129,6 +132,10 @@ function gen_subtree_command() {
     [[ $1 == pull   ]] && local add_if_missing=--add-if-missing
     [[ $1 == push   ]] && branch=$push_branch
 
+    [[ $1 == pull   ]] && (( squash_on_pull )) && {
+        local arg_squash=--squash
+    }
+
     echo "  generating $git_dir/$script_dir/$1-$target_basename"
     cat > $script_dir/$1-$target_basename << BOOKENDS
 #!/bin/bash
@@ -143,7 +150,7 @@ command -v $subtree_command &> /dev/null || {
 
 set -x
 export DEFAULT_BRANCH=$branch
-exec $subtree_command $add_if_missing $subtree_prefix $upstream_url "\$@"
+exec $subtree_command $add_if_missing $arg_squash $subtree_prefix $upstream_url "\$@"
 BOOKENDS
 
     git update-index --add --chmod +x $script_dir/$1-$target_basename
